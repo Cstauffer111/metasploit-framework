@@ -160,6 +160,7 @@ module BindAwsSsm
     register_advanced_options(
       [
         OptString.new('SSM_SESSION_DOC', [true, 'The SSM document to use for session requests', 'SSM-SessionManagerRunShell']),
+        # AWS-RunShellScript, AWS-RunPowerShellScript, etc
         OptBool.new('SSM_KEEP_ALIVE', [false, 'Keep AWS SSM session alive with empty messages', true])
       ], Msf::Handler::BindAwsSsm)
 
@@ -210,7 +211,7 @@ module BindAwsSsm
       ctimeout = exploit_config['active_timeout'].to_i
     end
 
-    # Ignore this if one of the requried options is missing
+    # Ignore this if one of the required options is missing
     return if datastore['EC2_ID'].blank?
 
     # Only try the same host/port combination once

@@ -3,8 +3,8 @@ module Msf::Module::ModuleInfo
   # CONSTANTS
   #
 
-  # The list of options that support merging in an information hash.
-  UpdateableOptions = [ "Name", "Description", "Alias", "PayloadCompat" ]
+  # The list of options that don't support merging in an information hash.
+  UpdateableOptions = [ "Name", "Description", "Alias", "PayloadCompat" , "Stance"]
 
   #
   # Instance Methods
@@ -83,7 +83,7 @@ module Msf::Module::ModuleInfo
   #
   def merge_check_key(info, name, val)
     if (self.respond_to?("merge_info_#{name.downcase}", true))
-      eval("merge_info_#{name.downcase}(info, val)")
+      self.send("merge_info_#{name.downcase}", info, val)
     else
       # If the info hash already has an entry for this name
       if (info[name])
@@ -224,20 +224,20 @@ module Msf::Module::ModuleInfo
   # platforms, and options.
   #
   def update_info(info, opts)
-    opts.each_pair { |name, val|
+    opts.each_pair do |name, val|
       # If the supplied option name is one of the ones that we should
       # override by default
-      if (UpdateableOptions.include?(name) == true)
+      if UpdateableOptions.include?(name)
         # Only if the entry is currently nil do we use our value
-        if (info[name] == nil)
+        if info[name].nil?
           info[name] = val
         end
-      # Otherwise, perform the merge operation like normal
+        # Otherwise, perform the merge operation like normal
       else
         merge_check_key(info, name, val)
       end
-    }
+    end
 
-    return info
+    info
   end
 end

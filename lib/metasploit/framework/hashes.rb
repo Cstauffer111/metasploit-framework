@@ -124,6 +124,10 @@ module Metasploit
         when hash =~ /^\*?[\da-fA-F]{32}\*[\da-fA-F]{32}$/
           # we accept the beginning star as optional
           return 'vnc'
+        when hash =~ /^\$pbkdf2-sha256\$[0-9]+\$[a-z0-9\/.]+\$[a-z0-9\/.]{43}$/i
+          return 'pbkdf2-sha256'
+        when hash =~ /^\$sntp-ms\$[\da-fA-F]{32}\$[\da-fA-F]{96}$/
+          return 'timeroast'
         end
         ''
       end

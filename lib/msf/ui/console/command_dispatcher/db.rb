@@ -54,6 +54,7 @@ class Db
       "db_nmap"       => "Executes nmap and records the output automatically",
       "db_rebuild_cache" => "Rebuilds the database-stored module cache (deprecated)",
       "analyze"       => "Analyze database information about a specific address or address range",
+      "db_stats"         => "Show statistics for the database"
     }
 
     # Always include commands that only make sense when connected.
@@ -382,9 +383,13 @@ class Db
     opts[:workspace] = framework.db.workspace
     opts[:tag_name] = tag_name
 
+    # This will be the case if no IP was passed in, and we are just trying to delete all
+    # instances of a given tag within the database.
     if rws == [nil]
-      unless framework.db.delete_host_tag(opts)
-        print_error("Host #{opts[:address].to_s + " " if opts[:address]}could not be found.")
+      wspace = Msf::Util::DBManager.process_opts_workspace(opts, framework)
+      wspace.hosts.each do |host|
+        opts[:address] = host.address
+        framework.db.delete_host_tag(opts)
       end
     else
       rws.each do |rw|
@@ -396,7 +401,6 @@ class Db
         end
       end
     end
-
   end
 
   @@hosts_columns = [ 'address', 'mac', 'name', 'os_name', 'os_flavor', 'os_sp', 'purpose', 'info', 'comments']
@@ -418,15 +422,6 @@ class Db
     [ '-c', '--columns' ] => [ true, 'Only show the given columns (see list below)', '<columns>' ],
     [ '-C', '--columns-until-restart' ] => [ true, 'Only show the given columns until the next restart (see list below)', '<columns>' ],
   )
-
-  def cmd_hosts_help(default_columns)
-    print_line "Usage: hosts [ options ] [addr1 addr2 ...]"
-    print_line
-    print @@hosts_opts.usage
-    print_line
-    print_line "Available columns: #{default_columns.join(", ")}"
-    print_line
-  end
 
   def cmd_hosts(*args)
     return unless active?
@@ -483,7 +478,12 @@ class Db
     @@hosts_opts.parse(args) do |opt, idx, val|
       case opt
       when '-h', '--help'
-        cmd_hosts_help(default_columns)
+        print_line "Usage: hosts [ options ] [addr1 addr2 ...]"
+        print_line
+        print @@hosts_opts.usage
+        print_line
+        print_line "Available columns: #{default_columns.join(", ")}"
+        print_line
         return
       when '-a', '--add'
         mode << :add
@@ -639,7 +639,7 @@ class Db
 
         tbl << columns
         if set_rhosts
-          addr = (host.scope ? host.address + '%' + host.scope : host.address)
+          addr = (host.scope.to_s != "" ? host.address + '%' + host.scope : host.address)
           rhosts << addr
         end
       end
@@ -694,12 +694,12 @@ class Db
     []
   end
 
-  def cmd_services_help(default_columns)
+  def cmd_services_help
     print_line "Usage: services [-h] [-u] [-a] [-r <proto>] [-p <port1,port2>] [-s <name1,name2>] [-o <filename>] [addr1 addr2 ...]"
     print_line
     print @@services_opts.usage
     print_line
-    print_line "Available columns: #{default_columns.join(", ")}"
+    print_line "Available columns: #{@@services_columns.join(", ")}"
     print_line
   end
 
@@ -720,6 +720,122 @@ class Db
     [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
     [ '-h', '--help' ] => [ false, 'Show this help information.' ]
   )
+
+  def db_connection_info(framework)
+    unless framework.db.connection_established?
+      return "#{framework.db.driver} selected, no connection"
+    end
+
+    cdb = ''
+    if framework.db.driver == 'http'
+      cdb = framework.db.name
+    else
+      ::ApplicationRecord.connection_pool.with_connection do |conn|
+        if conn.respond_to?(:current_database)
+          cdb = conn.current_database
+        end
+      end
+    end
+
+    if cdb.empty?
+      output = "Connected Database Name could not be extracted. DB Connection type: #{framework.db.driver}."
+    else
+      output = "Connected to #{cdb}. Connection type: #{framework.db.driver}."
+    end
+
+    output
+  end
+
+  def cmd_db_stats(*args)
+    return unless active?
+    print_line "Session Type: #{db_connection_info(framework)}"
+
+    current_workspace = framework.db.workspace
+    example_workspaces = ::Mdm::Workspace.order(id: :desc)
+    ordered_workspaces = ([current_workspace] + example_workspaces).uniq.sort_by(&:id)
+
+    tbl = Rex::Text::Table.new(
+    'Indent'  => 2,
+    'Header'  => "Database Stats",
+    'Columns' =>
+      [
+        "IsTarget",
+        "ID",
+        "Name",
+        "Hosts",
+        "Services",
+        "Services per Host",
+        "Vulnerabilities",
+        "Vulns per Host",
+        "Notes",
+        "Creds",
+        "Kerberos Cache"
+      ],
+    'SortIndex' => 1,
+    'ColProps' => {
+      'IsTarget' => {
+        'Stylers' => [Msf::Ui::Console::TablePrint::RowIndicatorStyler.new],
+        'ColumnStylers' => [Msf::Ui::Console::TablePrint::OmitColumnHeader.new],
+        'Width' => 2
+      }
+    }
+    )
+
+    total_hosts = 0
+    total_services = 0
+    total_vulns = 0
+    total_notes = 0
+    total_creds = 0
+    total_tickets = 0
+
+    ordered_workspaces.map do |workspace|
+
+      hosts = workspace.hosts.count
+      services = workspace.services.count
+      vulns = workspace.vulns.count
+      notes = workspace.notes.count
+      creds = framework.db.creds(workspace: workspace.name).count # workspace.creds.count.to_fs(:delimited) is always 0 for whatever reason
+      kerbs = ticket_search([nil], nil, :workspace => workspace).count
+
+      total_hosts += hosts
+      total_services += services
+      total_vulns += vulns
+      total_notes += notes
+      total_creds += creds
+      total_tickets += kerbs
+
+      tbl << [
+        current_workspace.id == workspace.id,
+        workspace.id,
+        workspace.name,
+        hosts.to_fs(:delimited),
+        services.to_fs(:delimited),
+        hosts > 0 ? (services.to_f / hosts).truncate(2) : 0,
+        vulns.to_fs(:delimited),
+        hosts > 0 ? (vulns.to_f / hosts).truncate(2) : 0,
+        notes.to_fs(:delimited),
+        creds.to_fs(:delimited),
+        kerbs.to_fs(:delimited)
+      ]
+    end
+
+    # total row
+    tbl << [
+      "",
+      "Total",
+      ordered_workspaces.length.to_fs(:delimited),
+      total_hosts.to_fs(:delimited),
+      total_services.to_fs(:delimited),
+      total_hosts > 0 ? (total_services.to_f / total_hosts).truncate(2) : 0,
+      total_vulns,
+      total_hosts > 0 ? (total_vulns.to_f / total_hosts).truncate(2) : 0,
+      total_notes,
+      total_creds.to_fs(:delimited),
+      total_tickets.to_fs(:delimited)
+    ]
+
+    print_line tbl.to_s
+  end
 
   def cmd_services(*args)
     return unless active?
@@ -798,7 +914,7 @@ class Db
         search_term = val
         opts[:search_term] = search_term
       when '-h', '--help'
-        cmd_services_help(@@services_columns)
+        cmd_services_help
         return
       else
         # Anything that wasn't an option is a host to search for
@@ -877,7 +993,7 @@ class Db
         columns = [host.address] + col_names.map { |n| service[n].to_s || "" }
         tbl << columns
         if set_rhosts
-          addr = (host.scope ? host.address + '%' + host.scope : host.address )
+          addr = (host.scope.to_s != "" ? host.address + '%' + host.scope : host.address )
           rhosts << addr
         end
       end
@@ -1053,7 +1169,7 @@ class Db
       tbl << row
 
       if set_rhosts
-        addr = (vuln.host.scope ? vuln.host.address + '%' + vuln.host.scope : vuln.host.address)
+        addr = (vuln.host.scope.to_s != "" ? vuln.host.address + '%' + vuln.host.scope : vuln.host.address)
         rhosts << addr
       end
     end
@@ -1114,12 +1230,13 @@ class Db
   @@notes_opts = Rex::Parser::Arguments.new(
     [ '-a', '--add' ] => [ false, 'Add a note to the list of addresses, instead of listing.' ],
     [ '-d', '--delete' ] => [ false, 'Delete the notes instead of searching.' ],
-    [ '-n', '--note' ] => [ true, 'Set the data for a new note (only with -a).', '<note>' ],
-    [ '-t', '--type' ] => [ true, 'Search for a list of types, or set single type for add.', '<type1,type2>' ],
     [ '-h', '--help' ] => [ false, 'Show this help information.' ],
-    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
-    [ '-o', '--output' ] => [ true, 'Save the notes to a csv file.', '<filename>' ],
+    [ '-n', '--note' ] => [ true, 'Set the data for a new note (only with -a).', '<note>' ],
     [ '-O', '--order' ] => [ true, 'Order rows by specified column number.', '<column id>' ],
+    [ '-o', '--output' ] => [ true, 'Save the notes to a csv file.', '<filename>' ],
+    [ '-R', '--rhosts' ] => [ false, 'Set RHOSTS from the results of the search.' ],
+    [ '-S', '--search' ] => [ true, 'Search string to filter by.', '<filter>' ],
+    [ '-t', '--type' ] => [ true, 'Search for a list of types, or set single type for add.', '<type1,type2>' ],
     [ '-u', '--update' ] => [ false, 'Update a note. Not officially supported.' ]
   )
 
@@ -1277,7 +1394,7 @@ class Db
         host = note.host
         row << host.address
         if set_rhosts
-          addr = (host.scope ? host.address + '%' + host.scope : host.address)
+          addr = (host.scope.to_s != "" ? host.address + '%' + host.scope : host.address)
           rhosts << addr
         end
       else
@@ -1596,7 +1713,7 @@ class Db
     print_line "    Nikto XML"
     print_line "    Nmap XML"
     print_line "    OpenVAS Report"
-    print_line "    OpenVAS XML"
+    print_line "    OpenVAS XML (optional arguments -cert -dfn)"
     print_line "    Outpost24 XML"
     print_line "    Qualys Asset XML"
     print_line "    Qualys Scan XML"
@@ -1611,12 +1728,22 @@ class Db
   #
   def cmd_db_import(*args)
     return unless active?
+    openvas_cert = false
+    openvas_dfn = false
   ::ApplicationRecord.connection_pool.with_connection {
     if args.include?("-h") || ! (args && args.length > 0)
       cmd_db_import_help
       return
     end
+    if args.include?("-dfn")
+      openvas_dfn = true
+    end
+    if args.include?("-cert")
+      openvas_cert = true
+    end
+    options = {:openvas_dfn => openvas_dfn, :openvas_cert => openvas_cert}
     args.each { |glob|
+      next if (glob.include?("-cert") || glob.include?("-dfn"))
       files = ::Dir.glob(::File.expand_path(glob))
       if files.empty?
         print_error("No such file #{glob}")
@@ -1629,7 +1756,7 @@ class Db
         end
         begin
           warnings = 0
-          framework.db.import_file(:filename => filename) do |type,data|
+          framework.db.import_file(:filename => filename, :options => options) do |type,data|
             case type
             when :debug
               print_error("DEBUG: #{data.inspect}")

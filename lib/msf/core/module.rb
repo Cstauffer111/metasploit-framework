@@ -83,6 +83,19 @@ module Msf
       # The path from which the module was loaded.
       #
       attr_accessor :file_path
+
+      # @return [String, nil] Reference name of the payload being adapted
+      attr_accessor :adapted_refname
+
+      # @return [String, nil] Reference name of the payloads adapter
+      attr_accessor :adapter_refname
+
+      # @return [String, nil] Reference name of the payload stage
+      attr_accessor :stage_refname
+
+      # @return [String, nil] Reference name of the payloads stager
+      attr_accessor :stager_refname
+
     end
 
     #
@@ -207,6 +220,26 @@ module Msf
       self.class.file_path
     end
 
+    # @return [String, nil] Reference name of the payload being adapted
+    def adapted_refname
+      self.class.adapted_refname
+    end
+
+    # @return [String, nil] Reference name of the payloads adapter
+    def adapter_refname
+      self.class.adapter_refname
+    end
+
+    # @return [String, nil] Reference name of the payload stage
+    def stage_refname
+      self.class.stage_refname
+    end
+
+    # @return [String, nil] Reference name of the payloads stager
+    def stager_refname
+      self.class.stager_refname
+    end
+
     #
     # Returns the current workspace
     #
@@ -298,6 +331,10 @@ module Msf
     #
     def self.cached?
       false
+    end
+
+    def default_options
+      self.module_info['DefaultOptions']
     end
 
     def required_cred_options
@@ -421,6 +458,8 @@ module Msf
     attr_writer   :platform, :references # :nodoc:
     attr_writer   :privileged # :nodoc:
     attr_writer   :license # :nodoc:
+
+
 
   end
 

@@ -13,14 +13,15 @@ module Msf
       include Msf::Ui::Console::CommandDispatcher
 
       class CaptureJobListener
-        def initialize(name, done_event)
+        def initialize(name, done_event, dispatcher)
           @name = name
           @done_event = done_event
+          @dispatcher = dispatcher
         end
 
         def waiting(_id)
           self.succeeded = true
-          print_good("#{@name} started")
+          @dispatcher.print_good("#{@name} started")
           @done_event.set
         end
 
@@ -29,7 +30,7 @@ module Msf
         def completed(id, result, mod); end
 
         def failed(_id, _error, _mod)
-          print_error("#{@name} failed to start")
+          @dispatcher.print_error("#{@name} failed to start")
           @done_event.set
         end
 
@@ -82,6 +83,7 @@ module Msf
         # short circuit the whole deal if they need help
         return help if args.empty?
         return help if args.length == 1 && args.first =~ HELP_REGEX
+        return help(args.last) if args.length == 2 && args.first =~ HELP_REGEX
 
         begin
           if args.first == 'stop'
@@ -196,6 +198,7 @@ module Msf
           'DRDA' => 'auxiliary/server/capture/drda',
           'FTP' => 'auxiliary/server/capture/ftp',
           'IMAP' => 'auxiliary/server/capture/imap',
+          'LDAP' => 'auxiliary/server/capture/ldap',
           'MSSQL' => 'auxiliary/server/capture/mssql',
           'MySQL' => 'auxiliary/server/capture/mysql',
           'POP3' => 'auxiliary/server/capture/pop3',
@@ -322,7 +325,7 @@ module Msf
 
         modules_to_run.each do |svc, mod, opts|
           event = Rex::Sync::Event.new(false, false)
-          job_listener = CaptureJobListener.new(mod.name, event)
+          job_listener = CaptureJobListener.new(mod.name, event, self)
 
           result = Msf::Simple::Auxiliary.run_simple(mod, opts, job_listener: job_listener)
           job_id = result[1]
@@ -389,6 +392,8 @@ module Msf
           print_line(@stop_opt_parser.usage)
         else
           print_line('Usage: captureg [start|stop] [options]')
+          print_line('')
+          print_line('Use captureg --help [start|stop] for more detailed usage help')
         end
       end
 
@@ -571,6 +576,11 @@ module Msf
 
       def configure_smb(datastore, config)
         datastore['SMBDOMAIN'] = config[:ntlm_domain]
+        datastore['CHALLENGE'] = config[:ntlm_challenge]
+      end
+
+      def configure_ldap(datastore, config)
+        datastore['DOMAIN'] = config[:ntlm_domain]
         datastore['CHALLENGE'] = config[:ntlm_challenge]
       end
 

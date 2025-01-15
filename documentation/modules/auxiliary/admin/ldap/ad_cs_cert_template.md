@@ -1,9 +1,13 @@
-## RBCD Exploitation
+## AD CS Certificate Template Exploitation
 
 This module can read, write, update, and delete AD CS certificate templates from a Active Directory Domain Controller.
 
-The READ, UPDATE, and DELETE actions will write a copy of the certificate template to disk that can be restored using
-the CREATE or UPDATE actions.
+The READ, UPDATE, and DELETE actions will write a copy of the certificate template to disk that can be
+restored using the CREATE or UPDATE actions. The CREATE and UPDATE actions require a certificate template data
+file to be specified to define the attributes. Template data files are provided to create a template that is
+vulnerable to ESC1, ESC2, ESC3 and ESC15.
+
+This module is capable of exploiting ESC4.
 
 In order for the `auxiliary/admin/ldap/ad_cs_cert_template` module to succeed, the authenticated user must have the 
 necessary permissions to perform the specified action on the target object (the certificate specified in
@@ -15,7 +19,7 @@ Follow the steps in the [[Installing AD CS|ad-certificates/overview.md#installin
 
 ## Module usage
 
-The `admin/ldap/ad_cs_template` module is generally used to update a certificate template as part of an ESC4 attack.
+The `admin/ldap/ad_cs_cert_template` module is generally used to update a certificate template as part of an ESC4 attack.
 
 1. From msfconsole
 2. Do: `use auxiliary/admin/ldap/ad_cs_cert_template`
@@ -56,11 +60,11 @@ The file format is determined by the extension so the file must end in either `.
 
 #### The JSON format
 The JSON file format is a hash with attribute name keys and ASCII-hex encoded values. These files are compatible with
-[`Certipy`'s][certipy] `template` command. This module uses the JSON file format when storing copies fo certificate to
+[`Certipy`'s][certipy] `template` command. This module uses the JSON file format when storing copies of certificate to
 disk.
 
 #### The YAML format
-The YAML file format is similiar to the JSON file format, but takes advantage of YAML's ability to include comments.
+The YAML file format is similar to the JSON file format, but takes advantage of YAML's ability to include comments.
 The file consists of a hash with attribute name keys and value strings. The `nTSecurityDescriptor` file can be either
 a binary string representing a literal value, or a security descriptor defined in Microsoft's [Security Descriptor
 Definition Language (SDDL)][sddl]. Premade configuration templates provided by Metasploit use this format.

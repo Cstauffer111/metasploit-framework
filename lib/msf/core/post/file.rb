@@ -580,7 +580,7 @@ module Msf::Post::File
     if session.type == 'meterpreter' && session.commands.include?(Rex::Post::Meterpreter::Extensions::Stdapi::COMMAND_ID_STDAPI_FS_CHMOD)
       session.fs.file.chmod(path, mode)
     else
-      cmd_exec("chmod #{mode.to_s(8)} '#{path}'")
+      create_process('chmod', args: [mode.to_s(8), path])
     end
   end
 
@@ -740,6 +740,7 @@ module Msf::Post::File
     else
       file_mode = 'Create'
     end
+    file_name = file_name.gsub("'","''")
     pwsh_code = <<~PSH
       try {
       $encoded='#{encoded_chunk}';
@@ -831,13 +832,14 @@ protected
   def _read_file_meterpreter(file_name)
     fd = session.fs.file.new(file_name, 'rb')
 
-    data = fd.read
+    data = ''.b
+    data << fd.read
     data << fd.read until fd.eof?
 
     data
   rescue EOFError
     # Sometimes fd isn't marked EOF in time?
-    ''
+    data
   rescue ::Rex::Post::Meterpreter::RequestError => e
     print_error("Failed to open file: #{file_name}: #{e}")
     return nil
@@ -910,7 +912,7 @@ protected
       success = _win_ansi_write_file(b64_filename, b64_data, chunk_size)
       return false unless success
       vprint_status("Uploaded Base64-encoded file. Decoding using certutil")
-      success = _shell_command_with_success_code("certutil -f -decode #{b64_filename} #{file_name}")
+      success = _shell_process_with_success_code('certutil', ['-f', '-decode', b64_filename, file_name])
       return false unless success
     rescue ::Exception => e
       print_error("Exception while running #{__method__}: #{e}")
@@ -936,10 +938,10 @@ protected
       success = _win_ansi_write_file(b64_filename, b64_data, chunk_size)
       return false unless success
       vprint_status("Uploaded Base64-encoded file. Decoding using certutil")
-      success = _shell_command_with_success_code("certutil -decode #{b64_filename} #{tmp_filename}")
+      success = _shell_process_with_success_code('certutil', ['-decode', b64_filename, tmp_filename])
       return false unless success
       vprint_status("Certutil succeeded. Appending using copy")
-      success = _shell_command_with_success_code("copy /b #{file_name}+#{tmp_filename} #{file_name}")
+      success = _shell_process_with_success_code('copy', ['/b', "#{file_name}+#{tmp_filename}", file_name])
       return false unless success
     rescue ::Exception => e
       print_error("Exception while running #{__method__}: #{e}")
@@ -979,7 +981,7 @@ protected
     # Short-circuit an empty string. The : builtin is part of posix
     # standard and should theoretically exist everywhere.
     if data.empty?
-      return _shell_command_with_success_code(": #{redirect} #{file_name}")
+      return _shell_command_with_success_code(": #{redirect} #{session.escape_arg(file_name)}")
     end
 
     d = data.dup
@@ -1004,7 +1006,7 @@ protected
       # produces a 0-length string. Some also allow octal escapes
       # without a format string, and do not truncate, so start with
       # that and try %b if it doesn't work. The standalone version seems
-      # to be more likely to work than the buitin version, so try it
+      # to be more likely to work than the builtin version, so try it
       # first.
       #
       # Both of these work for sure on Linux and FreeBSD
@@ -1080,7 +1082,7 @@ protected
     # The first command needs to use the provided redirection for either
     # appending or truncating.
     cmd = command.sub('CONTENTS') { chunks.shift }
-    succeeded = _shell_command_with_success_code("#{cmd} #{redirect} \"#{file_name}\"")
+    succeeded = _shell_command_with_success_code("#{cmd} #{redirect} #{session.escape_arg(file_name)}")
     return false unless succeeded
 
     # After creating/truncating or appending with the first command, we
@@ -1089,7 +1091,7 @@ protected
       vprint_status("Next chunk is #{chunk.length} bytes")
       cmd = command.sub('CONTENTS') { chunk }
 
-      succeeded = _shell_command_with_success_code("#{cmd} >> '#{file_name}'")
+      succeeded = _shell_command_with_success_code("#{cmd} >> #{session.escape_arg(file_name)}")
       unless succeeded
         print_warning("Write partially succeeded then failed. May need to manually clean up #{file_name}")
         return false
@@ -1103,8 +1105,17 @@ protected
     token = "_#{::Rex::Text.rand_text_alpha(32)}"
     result = session.shell_command_token("#{cmd} && echo #{token}")
 
-    return result.include?(token)
+    return result&.include?(token)
   end
+
+  def _shell_process_with_success_code(executable, args)
+    cmd = session.to_cmd([executable] + args)
+    token = "_#{::Rex::Text.rand_text_alpha(32)}"
+    result = session.shell_command_token("#{cmd} && echo #{token}")
+
+    return result&.include?(token)
+  end
+
 
   #
   # Calculate the maximum line length for a unix shell.

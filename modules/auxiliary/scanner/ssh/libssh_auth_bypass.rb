@@ -9,6 +9,8 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::Scanner
   include Msf::Auxiliary::CommandShell
   include Msf::Auxiliary::Report
+  include Msf::Sessions::CreateSessionOptions
+  include Msf::Auxiliary::ReportSummary
 
   def initialize(info = {})
     super(update_info(info,
@@ -118,7 +120,7 @@ class MetasploitModule < Msf::Auxiliary
       info: version
     )
 
-    shell = Net::SSH::CommandStream.new(ssh, *config)
+    shell = Net::SSH::CommandStream.new(ssh, datastore['CMD'], pty: datastore['SPAWN_PTY'], logger: self)
 
     # XXX: Wait for CommandStream to log a channel request failure
     sleep 0.1
@@ -128,6 +130,7 @@ class MetasploitModule < Msf::Auxiliary
       return
     end
 
+    print_status("Attempting #{action.name.inspect} Action, see \"show actions\" for more details")
     case action.name
     when 'Shell'
       if datastore['CreateSession']
@@ -152,12 +155,4 @@ class MetasploitModule < Msf::Auxiliary
   def username
     Rex::Text.rand_text_alphanumeric(8..42)
   end
-
-  def config
-    [
-      datastore['CMD'],
-      pty: datastore['SPAWN_PTY']
-    ]
-  end
-
 end

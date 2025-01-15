@@ -16,6 +16,7 @@ module MetasploitModule
         'Name' => 'Command Shell, Bind SSM (via AWS API)',
         'Description' => 'Creates an interactive shell using AWS SSM',
         'Author' => 'RageLtMan <rageltman[at]sempervictus>',
+        'References' => [['URL', 'https://www.sempervictus.com/single-post/once-upon-a-cloudy-air-i-crossed-a-gap-which-wasn-t-there']],
         'License' => MSF_LICENSE,
         'Platform' => '',
         'Arch' => ARCH_ALL,
@@ -32,6 +33,6 @@ module MetasploitModule
   def on_session(session)
     super
 
-    session.arch.clear  # undo the ARCH_ALL amalgamation
+    session.arch.clear # undo the ARCH_ALL amalgamation
   end
 end

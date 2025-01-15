@@ -79,16 +79,20 @@ module WindowsRegistry
 
     attr_accessor :lsa_vista_style
 
+    def normalize_key(key)
+      @root.blank? ? key : key.delete_prefix(@root)
+    end
+
     # Retrieve the decrypted LSA secret key from a given BootKey. This also sets
     # the @lsa_vista_style attributes according to the registry keys found
-    # under `HKLM\SECURTY\Policy`. If set to `true`, the system version is
+    # under `HKLM\SECURITY\Policy`. If set to `true`, the system version is
     # Windows Vista and above, otherwise it is Windows XP or below.
     #
     # @param boot_key [String] The BootKey
     # @return [String] The decrypted LSA secret key
     def lsa_secret_key(boot_key)
       # vprint_status('Getting PolEKList...')
-      _value_type, value_data = get_value('\\Policy\\PolEKList')
+      _value_type, value_data = get_value(normalize_key('HKLM\\SECURITY\\Policy\\PolEKList'))
       if value_data
         # Vista or above system
         @lsa_vista_style = true
@@ -97,7 +101,7 @@ module WindowsRegistry
         lsa_key = lsa_key[68, 32] unless lsa_key.empty?
       else
         # vprint_status('Getting PolSecretEncryptionKey...')
-        _value_type, value_data = get_value('\\Policy\\PolSecretEncryptionKey')
+        _value_type, value_data = get_value(normalize_key('HKLM\\SECURITY\\Policy\\PolSecretEncryptionKey'))
         # If that didn't work, then we're out of luck
         return nil if value_data.nil?
 
@@ -121,30 +125,29 @@ module WindowsRegistry
       lsa_key
     end
 
-    # Returns the decrypted LSA secrets under HKLM\SECURTY\Policy\Secrets. For
+    # Returns the decrypted LSA secrets under HKLM\SECURITY\Policy\Secrets. For
     # this, the LSA secret key must be provided, which can be retrieved with
     # the #lsa_secret_key method.
     #
     # @param lsa_key [String] The LSA secret key
     # @return [Hash] A hash containing the LSA secrets.
     def lsa_secrets(lsa_key)
-      keys = enum_key('\\Policy\\Secrets')
+      keys = enum_key(normalize_key('HKLM\\SECURITY\\Policy\\Secrets'))
       return unless keys
 
       keys.delete('NL$Control')
 
       keys.each_with_object({}) do |key, lsa_secrets|
-        # vprint_status("Looking into #{key}")
-        _value_type, value_data = get_value("\\Policy\\Secrets\\#{key}\\CurrVal")
+        _value_type, value_data = get_value(normalize_key("HKLM\\SECURITY\\Policy\\Secrets\\#{key}\\CurrVal"))
         encrypted_secret = value_data
         next unless encrypted_secret
 
         if @lsa_vista_style
           decrypted = decrypt_lsa_data(encrypted_secret, lsa_key)
-          secret_size = decrypted[0, 4].unpack('<L').first
+          secret_size = decrypted[0, 4].unpack('L<').first
           secret = decrypted[16, secret_size]
         else
-          encrypted_secret_size = encrypted_secret[0, 4].unpack('<L').first
+          encrypted_secret_size = encrypted_secret[0, 4].unpack('L<').first
           secret = decrypt_secret_data(encrypted_secret[(encrypted_secret.size - encrypted_secret_size)..-1], lsa_key)
         end
         lsa_secrets[key] = secret
@@ -152,19 +155,19 @@ module WindowsRegistry
     end
 
     # Returns the decrypted NLKM secret key from
-    # HKLM\SECURTY\Policy\Secrets\NL$KM\CurrVal. For this, the LSA secret key
+    # HKLM\SECURITY\Policy\Secrets\NL$KM\CurrVal. For this, the LSA secret key
     # must be provided, which can be retrieved with the #lsa_secret_key method.
     #
     # @param lsa_key [String] The LSA secret key
     # @return [String] The NLKM secret key
     def nlkm_secret_key(lsa_key)
-      _value_type, value_data = get_value('\\Policy\\Secrets\\NL$KM\\CurrVal')
+      _value_type, value_data = get_value(normalize_key('HKLM\\SECURITY\\Policy\\Secrets\\NL$KM\\CurrVal'))
       return nil unless value_data
 
       if @lsa_vista_style
         nlkm_dec = decrypt_lsa_data(value_data, lsa_key)
       else
-        value_data_size = value_data[0, 4].unpack('<L').first
+        value_data_size = value_data[0, 4].unpack('L<').first
         nlkm_dec = decrypt_secret_data(value_data[(value_data.size - value_data_size)..-1], lsa_key)
       end
 
@@ -188,7 +191,7 @@ module WindowsRegistry
     # @param nlkm_key [String] The NLKM secret key
     # @return [Array] An array of CacheInfo structures containing the Cache information
     def cached_infos(nlkm_key)
-      values = enum_values('\\Cache')
+      values = enum_values(normalize_key('HKLM\\SECURITY\\Cache'))
       unless values
         elog('[Msf::Util::WindowsRegistry::Sam::cached_hashes] No cashed entries')
         return
@@ -198,12 +201,12 @@ module WindowsRegistry
 
       iteration_count = nil
       if values.delete('NL$IterationCount')
-        _value_type, value_data = reg_parser.get_value('\\Cache', 'NL$IterationCount')
+        _value_type, value_data = reg_parser.get_value(normalize_key('HKLM\\SECURITY\\Cache'), 'NL$IterationCount')
         iteration_count = value_data.to_i
       end
 
       values.map do |value|
-        _value_type, value_data = get_value('\\Cache', value)
+        _value_type, value_data = get_value(normalize_key('HKLM\\SECURITY\\Cache'), value)
         cache = CacheEntry.read(value_data)
 
         cache_info = CacheInfo.new(name: value, entry: cache)

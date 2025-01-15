@@ -12,6 +12,10 @@ module Metasploit
         DEFAULT_PORT = 88
         REALM_KEY = Metasploit::Model::Realm::Key::ACTIVE_DIRECTORY_DOMAIN
         DEFAULT_REALM = nil
+        LIKELY_PORTS = [ DEFAULT_PORT ].freeze
+        LIKELY_SERVICE_NAMES = [ 'kerberos', 'kerberos5', 'krb5', 'kerberos-sec' ].freeze
+        PRIVATE_TYPES = %i[ password ].freeze
+        CAN_GET_SESSION = true
 
         def attempt_login(credential)
           result_options = {
@@ -29,6 +33,20 @@ module Metasploit
               password: credential.private,
               realm: credential.realm
             )
+            unless res.preauth_required
+              # Pre-auth not required - let's get an RC4-HMAC ticket, since it's more easily crackable
+              begin
+                res = send_request_tgt(
+                  server_name: server_name,
+                  client_name: credential.public,
+                  password: credential.private,
+                  realm: credential.realm,
+                  offered_etypes: [Rex::Proto::Kerberos::Crypto::Encryption::RC4_HMAC]
+                )
+              rescue Rex::Proto::Kerberos::Model::Error::KerberosEncryptionNotSupported => e
+                # RC4 likely disabled - let's just use the initial response
+              end
+            end
 
             result_options = result_options.merge(
               {
@@ -103,6 +121,7 @@ module Metasploit
         private
 
         def set_sane_defaults
+          self.connection_timeout = 10 if self.connection_timeout.nil?
           self.port = DEFAULT_PORT unless self.port
         end
 

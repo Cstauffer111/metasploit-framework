@@ -147,7 +147,7 @@ This method is just a stub on the Base mixin. It will be overridden in each Logi
 
 For an example let's look at the attempt_login method from `Metasploit::Framework::LoginScanner::FTP (lib/metasploit/framework/login_scanner/ftp.rb)`
  
- ```ruby
+```ruby
  # (see Base#attempt_login)
 def attempt_login(credential)
   result_options = {
@@ -156,7 +156,7 @@ def attempt_login(credential)
 
   begin
     success = connect_login(credential.public, credential.private)
-  rescue ::EOFError,  Rex::AddressInUse, Rex::ConnectionError, Rex::ConnectionTimeout, ::Timeout::Error
+  rescue ::EOFError,  Rex::AddressInUse, Rex::ConnectionError, Rex::ConnectionProxyError, Rex::ConnectionTimeout, Rex::TimeoutError, Errno::ECONNRESET, Errno::EINTR, ::Timeout::Error
     result_options[:status] = Metasploit::Model::Login::Status::UNABLE_TO_CONNECT
     success = false
   end
@@ -170,7 +170,7 @@ def attempt_login(credential)
 
   ::Metasploit::Framework::LoginScanner::Result.new(result_options)
 end
- ```
+```
  
 ### scan!
 
@@ -342,7 +342,7 @@ The result object now as a `.to_h` method which returns a hash compatible with o
 
 In the case of a success we build some info hashes and call `create_credential`. This is a method found in the metasploit-credential gem under `lib/metasploit/credential/creation.rb` in a mixin called `Metasploit::Credential::Creation`. This mixin is included in the Report mixin, so if your module includes that mixin you'll get these methods for free.
 
-`create_credential` creates a `Metasploit::Credential::Core`. We then take that core, the service data, and merge it with some additional data. This additional data includes the access level, the current time (to update last_attempted_at on the `Metasploit::Credential::Login`), the the status. 
+`create_credential` creates a `Metasploit::Credential::Core`. We then take that core, the service data, and merge it with some additional data. This additional data includes the access level, the current time (to update last_attempted_at on the `Metasploit::Credential::Login`), the status. 
 
 Finally, for a success, we output the result to the console.
 

@@ -4,11 +4,12 @@
 
 require 'metasploit/framework/command'
 require 'metasploit/framework/command/base'
+require 'rex/text'
 
 # Based on pattern used for lib/rails/commands in the railties gem.
 class Metasploit::Framework::Command::Console < Metasploit::Framework::Command::Base
 
-  # Provides an animated spinner in a seperate thread.
+  # Provides an animated spinner in a separate thread.
   #
   # See GitHub issue #4147, as this may be blocking some
   # Windows instances, which is why Windows platforms
@@ -44,7 +45,12 @@ class Metasploit::Framework::Command::Console < Metasploit::Framework::Command::
     when :version
       $stderr.puts "Framework Version: #{Metasploit::Framework::VERSION}"
     else
-      spinner unless parsed_options.options.console.quiet
+      unless parsed_options.options.console.quiet
+        colorizor = Struct.new(:supports_color?).new(false).extend(Rex::Text::Color)
+        $stdout.print colorizor.substitute_colors(Rex::Text.wordwrap("Metasploit tip: #{Msf::Ui::Tip.sample}\n", indent = 0, cols = 80))
+        spinner
+      end
+
       driver.run
     end
   end
@@ -86,7 +92,6 @@ class Metasploit::Framework::Command::Console < Metasploit::Framework::Command::
       driver_options['ModulePath'] = options.modules.path
       driver_options['Plugins'] = options.console.plugins
       driver_options['Readline'] = options.console.readline
-      driver_options['RealReadline'] = options.console.real_readline
       driver_options['Resource'] = options.console.resources
       driver_options['XCommands'] = options.console.commands
 

@@ -35,6 +35,8 @@ class MsfAutoload
         'PowerShell'
       elsif basename == 'ui' && abspath.end_with?("#{__dir__}/msf/core/module/ui", "#{__dir__}/msf/core/module/ui.rb", "#{__dir__}/rex/post/ui", "#{__dir__}/rex/post/ui.rb", "#{__dir__}/rex/post/meterpreter/extensions/stdapi/ui.rb")
         'UI'
+      elsif basename == 'mysql' && abspath.end_with?("#{__dir__}/msf/core/exploit/remote/mysql.rb")
+        'MYSQL'
       elsif basename == 'ssh' && abspath.end_with?("#{__dir__}/rex/proto/ssh")
         'Ssh'
       elsif basename == 'http' && abspath.end_with?("#{__dir__}/rex/proto/http")
@@ -42,8 +44,8 @@ class MsfAutoload
       elsif basename == 'rftransceiver' && abspath.end_with?("#{__dir__}/rex/post/hwbridge/ui/console/command_dispatcher/rftransceiver.rb")
         'RFtransceiver'
       else
-       super
-    end
+        super
+      end
     end
   end
 
@@ -143,7 +145,7 @@ class MsfAutoload
       'dcerpc_lsa' => 'DCERPC_LSA',
       'wdbrpc_client' => 'WDBRPC_Client',
       'sunrpc' => 'SunRPC',
-      'mysql' => 'MYSQL',
+      'mysql' => 'MySQL',
       'ldap' => 'LDAP',
       'sqli' => 'SQLi',
       'dhcp_server' => 'DHCPServer',
@@ -170,6 +172,7 @@ class MsfAutoload
       'pe_inject' => 'PEInject',
       'payload_db_conf' => 'PayloadDBConf',
       'reverse_tcp_x86' => 'ReverseTcp_x86',
+      'reverse_tcp_aarch64' => 'ReverseTcp_Aarch64',
       'ruby_dl' => 'RubyDL',
       'wmic' => 'WMIC',
       'net_api' => 'NetAPI',
@@ -186,6 +189,7 @@ class MsfAutoload
       'cli' => 'CLI',
       'sqlitei' => 'SQLitei',
       'mysqli' => 'MySQLi',
+      'postgresql' => 'PostgreSQL',
       'postgresqli' => 'PostgreSQLi',
       'ssh' => 'SSH',
       'winrm' => 'WinRM',
@@ -247,6 +251,7 @@ class MsfAutoload
       'meterpreter_mipsbe_linux' => 'Meterpreter_mipsbe_Linux',
       'meterpreter_aarch64_apple_ios' => 'Meterpreter_aarch64_Apple_iOS',
       'meterpreter_x64_osx' => 'Meterpreter_x64_OSX',
+      'meterpreter_aarch64_osx' => 'Meterpreter_aarch64_OSX',
       'meterpreter_ppc_linux' => 'Meterpreter_ppc_Linux',
       'meterpreter_x64_win' => 'Meterpreter_x64_Win',
       'meterpreter_php' => 'Meterpreter_Php_Php',
@@ -292,6 +297,8 @@ class MsfAutoload
       'appapi' => 'AppApi',
       'uds_errors' => 'UDSErrors',
       'smb_hash_capture' => 'SMBHashCapture',
+      'rex_ntlm' => 'RexNTLM',
+      'teamcity' => 'TeamCity'
     }
   end
 
@@ -332,8 +339,12 @@ end
 autoload :Faker, 'faker'
 autoload :BinData, 'bindata'
 autoload :RubySMB, 'ruby_smb'
+autoload :MetasploitPayloads, 'metasploit-payloads'
+autoload :PacketFu, 'packetfu'
 
 require 'rexml/document'
+# Load IO#expect moneypatch
+require 'expect'
 
 # XXX: Should be removed once the `lib/metasploit` folder is loaded by Zeitwerk
 require 'metasploit/framework/hashes'

